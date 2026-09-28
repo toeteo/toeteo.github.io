@@ -71,7 +71,7 @@
   const resultsHead = document.getElementById('resultsHead');
   const resultsBody = document.getElementById('resultsBody');
 
-  fetch('final/test2.json')
+  fetch('data.json')
     .then(r => {
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
