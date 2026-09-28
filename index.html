@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Country Ranker</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+  }
+  #layout {
+    display: flex;
+    height: 100vh;
+  }
+  #categories {
+    flex: 0 0 50%;
+    overflow-y: auto;
+    height: 100vh;
+  }
+  #results {
+    flex: 0 0 50%;
+    overflow-y: auto;
+    height: 100vh;
+  }
+  .category-row {
+    display: flex;
+    flex-direction: column;
+  }
+  .category-row-top {
+    display: flex;
+    justify-content: space-between;
+  }
+  .category-row input[type="range"] {
+    width: 100%;
+  }
+  table {
+    width: 100%;
+  }
+</style>
+</head>
+<body>
+
+  <h1>Country ranker</h1>
+  <h5 id="status">Loading index.json...</h5>
+  <label>
+    <input type="checkbox" id="partialToggle">
+    Use partial data
+  </label>
+<div id="layout">
+  <div id="categories">
+    <div id="categoryList"></div>
+  </div>
+
+  <div id="results">
+    <table id="resultsTable">
+      <thead><tr id="resultsHead"></tr></thead>
+      <tbody id="resultsBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+(function () {
+  let countryData = [];
+  let categories = [];
+
+  const status = document.getElementById('status');
+  const categoryList = document.getElementById('categoryList');
+  const partialToggle = document.getElementById('partialToggle');
+  const resultsHead = document.getElementById('resultsHead');
+  const resultsBody = document.getElementById('resultsBody');
+
+  fetch('final/test2.json')
+    .then(r => {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(data => {
+      countryData = data;
+      categories = discoverCategories(countryData);
+      status.textContent = `Loaded ${countryData.length} countries, ${categories.length} categories.`;
+      renderCategoryControls(categories);
+      runRanking();
+    })
+    .catch(err => {
+      status.textContent = 'Error loading index.json: ' + err.message;
+    });
+
+  partialToggle.addEventListener('change', runRanking);
+
+  function discoverCategories(data) {
+    const set = new Set();
+    for (const country of data) {
+      const scores = country.scores || {};
+      Object.keys(scores).forEach(k => set.add(k));
+    }
+    return Array.from(set).sort();
+  }
+
+  function renderCategoryControls(cats) {
+    categoryList.innerHTML = '';
+    cats.forEach(cat => {
+      const row = document.createElement('div');
+      row.className = 'category-row';
+
+      const topRow = document.createElement('div');
+      topRow.className = 'category-row-top';
+      const label = document.createElement('label');
+      label.textContent = cat;
+      label.setAttribute('for', 'weight_' + cat);
+      const valSpan = document.createElement('span');
+      valSpan.textContent = '5';
+      topRow.appendChild(label);
+      topRow.appendChild(valSpan);
+
+      const slider = document.createElement('input');
+      slider.type = 'range';
+      slider.id = 'weight_' + cat;
+      slider.min = '0';
+      slider.max = '10';
+      slider.step = '1';
+      slider.value = '5';
+      slider.dataset.category = cat;
+
+      slider.addEventListener('input', () => {
+        valSpan.textContent = slider.value;
+        runRanking();
+      });
+
+      row.appendChild(topRow);
+      row.appendChild(slider);
+      categoryList.appendChild(row);
+    });
+  }
+
+  function getWeights() {
+    const weights = {};
+    categories.forEach(cat => {
+      const slider = document.getElementById('weight_' + cat);
+      weights[cat] = slider ? parseFloat(slider.value) : 0;
+    });
+    return weights;
+  }
+
+  function computeRanking(data, weights, usePartial) {
+    const activeCats = Object.keys(weights).filter(k => weights[k] > 0);
+    const results = [];
+
+    for (const country of data) {
+      const scores = country.scores || {};
+      const present = {};
+      let missingCount = 0;
+
+      activeCats.forEach(cat => {
+        if (scores[cat] !== undefined) {
+          present[cat] = scores[cat][1]; // normalized score
+        } else {
+          missingCount++;
+        }
+      });
+
+      const presentKeys = Object.keys(present);
+      if (presentKeys.length === 0) continue;
+      if (!usePartial && missingCount > 0) continue;
+
+      let weightSum = 0;
+      let weightedScore = 0;
+      presentKeys.forEach(cat => {
+        weightSum += weights[cat];
+        weightedScore += weights[cat] * present[cat];
+      });
+
+      results.push({
+        name: country.name,
+        alpha3: country['alpha-3'] || '',
+        score: weightedScore / weightSum,
+        scores: scores
+      });
+    }
+
+    results.sort((a, b) => b.score - a.score);
+    return results;
+  }
+
+  function runRanking() {
+    const weights = getWeights();
+    const activeCats = Object.keys(weights).filter(k => weights[k] > 0);
+
+    if (activeCats.length === 0) {
+      resultsHead.innerHTML = '';
+      resultsBody.innerHTML = '';
+      return;
+    }
+
+    const usePartial = partialToggle.checked;
+    const ranked = computeRanking(countryData, weights, usePartial);
+    renderResults(ranked.slice(0, 10), activeCats);
+  }
+
+  function renderResults(top10, activeCats) {
+    let headHtml = '<th>#</th><th>Country</th><th>Score</th>';
+    //activeCats.forEach(cat => {
+    //  headHtml += `<th>${cat} (rank)</th><th>${cat} (score)</th>`;
+    //});
+    resultsHead.innerHTML = headHtml;
+
+    let bodyHtml = '';
+    top10.forEach((row, i) => {
+      bodyHtml += `<tr><td>${i + 1}</td><td>${escapeHtml(row.name)}</td><td>${row.score.toFixed(4)}</td>`;
+      bodyHtml += '</tr>';
+    });
+    resultsBody.innerHTML = bodyHtml;
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str == null ? '' : String(str);
+    return div.innerHTML;
+  }
+})();
+</script>
+
+</body>
+</html>
