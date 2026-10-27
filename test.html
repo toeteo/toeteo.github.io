@@ -1,11 +1,39 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>test</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>country ranker</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-    
+
+  <header>
+    <h1>country ranker</h1>
+    <h2>find out what's the best country for you</h2>
+    <div class="meta">
+      <h5 id="status">loading index.json...</h5>
+      <label class="toggle">
+        <input type="checkbox" id="partialToggle">
+        use partial data
+      </label>
+    </div>
+  </header>
+
+  <div id="layout">
+    <div id="categories">
+      <h3 class="panel-title">what matters to you</h3>
+      <div id="categoryList"></div>
+    </div>
+    <div id="results">
+      <table id="resultsTable">
+        <thead><tr id="resultsHead"></tr></thead>
+        <tbody id="resultsBody"></tbody>
+      </table>
+      <div id="emptyState" class="empty" hidden>set at least one category above 0 to see a ranking.</div>
+    </div>
+  </div>
+
+<script src="main.js"></script>
 </body>
 </html>
